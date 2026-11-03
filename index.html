@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RoboTwin 3D - Simulador y Motor Físico XPBD</title>
+  <link rel="stylesheet" href="css/main.css?v=2.4">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Contenedor 3D Three.js -->
+  <div id="canvas-container"></div>
+
+  <!-- Barra Superior Limpia y Minimalista -->
+  <header class="hud-panel hud-header">
+    <div class="brand">
+      <div class="brand-icon"></div>
+      <div>
+        <span class="brand-title">ROBOTWIN 3D</span>
+        <span class="brand-badge">MOTOR FÍSICO XPBD</span>
+      </div>
+    </div>
+
+    <!-- Presets de Cámara Rápidos -->
+    <div class="camera-presets">
+      <button id="cam-iso" class="hud-btn cam-btn active" title="Vista Isométrica Global">🌐 ISO</button>
+      <button id="cam-top" class="hud-btn cam-btn" title="Vista Cenital / Planta">📐 PLANTA</button>
+      <button id="cam-side" class="hud-btn cam-btn" title="Vista Lateral">📐 PERFIL</button>
+      <button id="cam-tool" class="hud-btn cam-btn" title="Cámara en Efector">📷 PINZA</button>
+    </div>
+
+    <!-- Controles de Acción Inmediata en Header -->
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <!-- Botón de Nodos XPBD siempre visible y activo por defecto -->
+      <button id="btn-toggle-particles-header" class="hud-btn active" style="border-color: #00f0ff; color: #00f0ff; font-weight: 600;" title="Alternar visualización de Nodos y Red XPBD">
+        ⚛️ NODOS XPBD: ON
+      </button>
+      <button id="btn-toggle-gripper" class="hud-btn accent">PINZA: ABIERTA</button>
+      <button id="btn-estop" class="hud-btn estop-btn">🛑 E-STOP</button>
+      <button id="btn-toggle-panel" class="hud-btn" title="Plegar/Desplegar Menú">⚙️ PANEL</button>
+    </div>
+  </header>
+
+  <!-- Panel Unificado por Pestañas (Limpio e Intuitivo) -->
+  <aside id="main-control-panel" class="hud-panel panel-unified">
+    <!-- Pestañas de Navegación -->
+    <div class="panel-tabs">
+      <button id="tab-btn-control" class="tab-btn active" data-tab="tab-control">🕹️ CONTROLES</button>
+      <button id="tab-btn-seq" class="tab-btn" data-tab="tab-seq">⚡ RUTINA DEMO</button>
+      <button id="tab-btn-telemetry" class="tab-btn" data-tab="tab-telemetry">📊 TELEMETRÍA</button>
+    </div>
+
+    <!-- PESTAÑA 1: CONTROLES DEL BRAZO Y PROPIEDADES FÍSICAS -->
+    <div id="tab-control" class="tab-content active">
+      <div class="mode-selector-bar">
+        <button id="btn-mode-manual" class="hud-btn active" style="flex: 1;">ÁNGULOS (FK)</button>
+        <button id="btn-mode-ik" class="hud-btn" style="flex: 1;">OBJETIVO 3D (IK)</button>
+      </div>
+
+      <!-- Selector de Material del Motor Físico XPBD -->
+      <div class="control-group" style="margin-top: 8px;">
+        <div class="control-label"><span>Material Físico (XPBD)</span></div>
+        <select id="sel-box-material" style="width: 100%; background: #161c24; color: #00f0ff; border: 1px solid rgba(0,240,255,0.3); border-radius: 4px; padding: 6px; font-size: 0.75rem; font-family: inherit;">
+          <option value="wood">Madera Rígida (Baja Deformación, μ = 0.65)</option>
+          <option value="rubber" selected>Goma Elástica (Industrial, μ = 0.95)</option>
+          <option value="jelly">Gelatina Blanda (Hiper-deformable, μ = 0.75)</option>
+        </select>
+      </div>
+
+      <!-- Sección FK: Articulaciones -->
+      <div id="section-fk" style="margin-top: 10px;">
+        <div class="control-group">
+          <div class="control-label"><span>J1 - Base (Giro)</span><span id="val-j1" class="val-badge">0.0°</span></div>
+          <input type="range" id="slider-j1" min="-180" max="180" step="0.5" value="0">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>J2 - Hombro</span><span id="val-j2" class="val-badge">14.3°</span></div>
+          <input type="range" id="slider-j2" min="-80" max="115" step="0.5" value="14.3">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>J3 - Codo</span><span id="val-j3" class="val-badge">-25.8°</span></div>
+          <input type="range" id="slider-j3" min="-135" max="135" step="0.5" value="-25.8">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>J4 - Muñeca Giro</span><span id="val-j4" class="val-badge">0.0°</span></div>
+          <input type="range" id="slider-j4" min="-180" max="180" step="0.5" value="0">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>J5 - Muñeca Flexión</span><span id="val-j5" class="val-badge">11.5°</span></div>
+          <input type="range" id="slider-j5" min="-100" max="100" step="0.5" value="11.5">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>J6 - Brida Herramienta</span><span id="val-j6" class="val-badge">0.0°</span></div>
+          <input type="range" id="slider-j6" min="-180" max="180" step="0.5" value="0">
+        </div>
+      </div>
+
+      <!-- Sección IK: Objetivo Cartesiano -->
+      <div id="section-ik" style="display: none;">
+        <p style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 10px;">
+          💡 Puedes arrastrar las flechas del Gizmo verde directamente en la pantalla 3D o usar estos controles:
+        </p>
+        <div class="control-group">
+          <div class="control-label"><span>Posición X (Lateral)</span><span id="val-ik-x" class="val-badge">0.00 m</span></div>
+          <input type="range" id="slider-ik-x" min="-2.6" max="2.6" step="0.05" value="0.0">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Posición Y (Altura)</span><span id="val-ik-y" class="val-badge">1.50 m</span></div>
+          <input type="range" id="slider-ik-y" min="0.15" max="3.4" step="0.05" value="1.5">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Posición Z (Avance)</span><span id="val-ik-z" class="val-badge">1.80 m</span></div>
+          <input type="range" id="slider-ik-z" min="-2.6" max="2.6" step="0.05" value="1.8">
+        </div>
+      </div>
+
+      <!-- Opciones Visuales Rápidas -->
+      <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; margin-top: 10px;">
+        <div class="toggle-row">
+          <span>Estela de Trayectoria (Trail)</span>
+          <input type="checkbox" id="chk-trail" checked>
+        </div>
+        <div class="toggle-row" style="margin-top: 6px;">
+          <span>Esfera de Alcance (Workspace)</span>
+          <input type="checkbox" id="chk-workspace">
+        </div>
+        <div class="toggle-row" style="margin-top: 6px;">
+          <span>Nodos de Partículas (XPBD)</span>
+          <input type="checkbox" id="chk-particles" checked>
+        </div>
+      </div>
+    </div>
+
+    <!-- PESTAÑA 2: RUTINA PICK & PLACE Y SECUENCIADOR -->
+    <div id="tab-seq" class="tab-content">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="btn-demo-routine" class="hud-btn active" style="padding: 10px; font-size: 0.85rem;">
+          ▶ INICIAR CICLO BIDIRECCIONAL (3 CAJAS)
+        </button>
+        <button id="btn-reset-boxes" class="hud-btn" style="font-size: 0.75rem; padding: 5px;">
+          🔄 RESTABLECER CAJAS A ZONA A
+        </button>
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-add-step" class="hud-btn" style="flex: 1; font-size: 0.75rem;">+ GUARDAR PASO</button>
+          <button id="btn-play-seq" class="hud-btn" style="flex: 1; font-size: 0.75rem;">REPRODUCIR</button>
+          <button id="btn-clear-seq" class="hud-btn" style="flex: 1; font-size: 0.75rem;">🗑 LIMPIAR</button>
+        </div>
+      </div>
+
+      <div class="panel-title" style="margin-top: 12px;"><span>Secuencia de Pasos</span></div>
+      <div id="waypoint-list" class="waypoint-list"></div>
+
+      <!-- Exportación -->
+      <div style="display: flex; gap: 4px; margin-top: 10px;">
+        <button id="btn-export-seq" class="hud-btn" style="flex: 1; font-size: 0.7rem;">💾 JSON</button>
+        <button id="btn-export-gcode" class="hud-btn" style="flex: 1; font-size: 0.7rem;">⚙️ G-CODE</button>
+        <button id="btn-export-rapid" class="hud-btn" style="flex: 1; font-size: 0.7rem;">🤖 RAPID</button>
+        <button id="btn-import-seq" class="hud-btn" style="flex: 1; font-size: 0.7rem;">📂 ABRIR</button>
+        <input type="file" id="file-import-seq" accept=".json" style="display: none;">
+      </div>
+    </div>
+
+    <!-- PESTAÑA 3: TELEMETRÍA Y RIGOR FÍSICO / MECATRÓNICO -->
+    <div id="tab-telemetry" class="tab-content">
+      <div id="status-alert-badge" class="alert-status normal">
+        <span>ESTADO: SEGURO (ZONA OPERATIVA)</span>
+      </div>
+
+      <div class="coord-grid" style="margin-top: 10px;">
+        <div class="coord-cell"><div class="coord-name">X (m)</div><div id="tcp-pos-x" class="coord-val">0.000</div></div>
+        <div class="coord-cell"><div class="coord-name">Y (m)</div><div id="tcp-pos-y" class="coord-val">0.000</div></div>
+        <div class="coord-cell"><div class="coord-name">Z (m)</div><div id="tcp-pos-z" class="coord-val">0.000</div></div>
+      </div>
+
+      <div class="panel-title" style="margin-top: 12px;"><span>Respuesta de Motores (60 Hz)</span></div>
+      <canvas id="telemetry-canvas"></canvas>
+
+      <div class="panel-title" style="margin-top: 12px;"><span>Fuerzas y Dinámica Mecatrónica</span></div>
+      <div class="math-box">
+        <div class="math-row">
+          <span class="math-label">Radio r(θ₂, θ₃):</span>
+          <span id="math-val-r" class="math-result">= 0.000 m</span>
+        </div>
+        <div class="math-row">
+          <span class="math-label">Torque Hombro τ₂:</span>
+          <span id="math-val-torque" class="math-result" style="color: #e056fd;">0.0 N·m</span>
+        </div>
+        <div class="math-row">
+          <span class="math-label">Fuerza Normal Pinza (F_N):</span>
+          <span id="math-val-clamp" class="math-result" style="color: #00ff88;">0.0 N</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; display: flex; gap: 6px;">
+        <button id="btn-toggle-dh" class="hud-btn" style="flex: 1; font-size: 0.75rem;">📋 TABLA D-H</button>
+        <button id="btn-toggle-serial" class="hud-btn" style="flex: 1; font-size: 0.75rem;">🔌 SERIAL USB</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Modal Denavit-Hartenberg (D-H) -->
+  <div id="modal-dh" class="hud-modal" style="display: none;">
+    <div class="hud-modal-content">
+      <div class="panel-title">
+        <span>Tabla de Parámetros Denavit-Hartenberg (D-H)</span>
+        <button id="btn-close-dh" class="hud-btn" style="padding: 2px 8px; font-size: 0.8rem;">✕</button>
+      </div>
+      <table class="dh-table">
+        <thead>
+          <tr>
+            <th>Eslabón $i$</th>
+            <th>Articulación</th>
+            <th>$\theta_i$ (Giro)</th>
+            <th>$d_i$ (Offset Z)</th>
+            <th>$a_i$ (Longitud X)</th>
+            <th>$\alpha_i$ (Torsión)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>J1 (Base)</td><td>θ₁*</td><td>0.70 m</td><td>0.00 m</td><td>+90°</td></tr>
+          <tr><td>2</td><td>J2 (Hombro)</td><td>θ₂*</td><td>0.00 m</td><td>1.80 m</td><td>0°</td></tr>
+          <tr><td>3</td><td>J3 (Codo)</td><td>θ₃*</td><td>0.00 m</td><td>0.00 m</td><td>+90°</td></tr>
+          <tr><td>4</td><td>J4 (Muñeca R)</td><td>θ₄*</td><td>1.90 m</td><td>0.00 m</td><td>-90°</td></tr>
+          <tr><td>5</td><td>J5 (Muñeca P)</td><td>θ₅*</td><td>0.00 m</td><td>0.00 m</td><td>+90°</td></tr>
+          <tr><td>6</td><td>J6 (Herramienta)</td><td>θ₆*</td><td>0.45 m</td><td>0.00 m</td><td>0°</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=3.4"></script>
+</body>
+</html>
