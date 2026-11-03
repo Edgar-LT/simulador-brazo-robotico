@@ -1,18 +1,18 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/TransformControls.js';
-import { SceneSetup } from './environment/SceneSetup.js?v=3.4';
-import { RobotArm } from './robot/RobotArm.js?v=3.4';
-import { WorkObjects } from './environment/WorkObjects.js?v=3.4';
-import { TelemetryChart } from './ui/TelemetryChart.js?v=3.4';
-import { SequenceEditor } from './ui/SequenceEditor.js?v=3.4';
-import { ControlsHUD } from './ui/ControlsHUD.js?v=3.4';
-import { TrajectoryTrail } from './robot/TrajectoryTrail.js?v=3.4';
-import { HardwareSerialBridge } from './robot/HardwareSerialBridge.js?v=3.4';
-import { PhysicsWorld } from './physics/PhysicsWorld.js?v=3.4';
-import { ParticlePhysicsWorld } from './physics/ParticlePhysicsWorld.js?v=3.4';
-import { RobotParticleLattice } from './physics/RobotParticleLattice.js?v=3.4';
-import { TableParticleLattice } from './physics/TableParticleLattice.js?v=3.4';
+import { SceneSetup } from './environment/SceneSetup.js?v=3.5';
+import { RobotArm } from './robot/RobotArm.js?v=3.5';
+import { WorkObjects } from './environment/WorkObjects.js?v=3.5';
+import { TelemetryChart } from './ui/TelemetryChart.js?v=3.5';
+import { SequenceEditor } from './ui/SequenceEditor.js?v=3.5';
+import { ControlsHUD } from './ui/ControlsHUD.js?v=3.5';
+import { TrajectoryTrail } from './robot/TrajectoryTrail.js?v=3.5';
+import { HardwareSerialBridge } from './robot/HardwareSerialBridge.js?v=3.5';
+import { PhysicsWorld } from './physics/PhysicsWorld.js?v=3.5';
+import { ParticlePhysicsWorld } from './physics/ParticlePhysicsWorld.js?v=3.5';
+import { RobotParticleLattice } from './physics/RobotParticleLattice.js?v=3.5';
+import { TableParticleLattice } from './physics/TableParticleLattice.js?v=3.5';
 
 class RoboTwinApp {
   constructor() {

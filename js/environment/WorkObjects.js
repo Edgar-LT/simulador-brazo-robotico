@@ -30,9 +30,9 @@ export class WorkObjects {
   }
 
   buildWorkcell() {
-    const tableWidth = 1.5;
+    const tableWidth = 1.6;
     const tableHeight = 0.85;
-    const tableDepth = 1.0;
+    const tableDepth = 1.3;
 
     // Mesa de Origen (Zona A) a la izquierda
     const posA = new THREE.Vector3(-1.8, 0, 0.8);
@@ -62,9 +62,9 @@ export class WorkObjects {
       targetTable.userData.collider = colliderB;
     }
 
-    // Definición de las 3 ranuras (Slots) sobre cada mesa
+    // Definición de las 3 ranuras (Slots) sobre cada mesa con holgura amplia (35 cm de separación)
     const tableTopY = tableHeight + 0.01;
-    const slotOffsetsZ = [-0.25, 0.0, 0.25];
+    const slotOffsetsZ = [-0.35, 0.0, 0.35];
 
     // Ranuras Mesa A
     slotOffsetsZ.forEach((zOff, i) => {

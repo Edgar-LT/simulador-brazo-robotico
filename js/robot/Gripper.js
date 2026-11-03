@@ -190,8 +190,13 @@ export class Gripper {
 
   releaseObject() {
     if (this.grippedObject && this.grippedObject.userData && this.grippedObject.userData.particleBody) {
-      this.grippedObject.userData.particleBody.isClamped = false;
-      this.grippedObject.userData.particleBody.contactNormalForce = 0.0;
+      const pBody = this.grippedObject.userData.particleBody;
+      pBody.isClamped = false;
+      pBody.contactNormalForce = 0.0;
+      // Disipar impulsos espurios residuales al soltar para que repose naturalmente en la mesa
+      for (let i = 0; i < pBody.particles.length; i++) {
+        pBody.particles[i].vel.set(0, 0, 0);
+      }
     }
     this.grippedObject = null;
   }

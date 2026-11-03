@@ -353,7 +353,10 @@ export class ParticleBody {
         const p = this.particles[i];
         capSeg.closestPointToPoint(p.pos, true, closestPoint);
         const dist = p.pos.distanceTo(closestPoint);
-        const minDist = cap.radius + p.radius + 0.015; // Margen de seguridad sólido
+        // Margen de seguridad sólido para eslabones; para los dedos del gripper se usa contacto directo
+        const isFingerCap = cap.name && cap.name.startsWith('gripper_finger');
+        const safetyMargin = isFingerCap ? 0.002 : 0.015;
+        const minDist = cap.radius + p.radius + safetyMargin;
 
         if (dist < minDist && dist > 1e-6) {
           const normal = new THREE.Vector3().subVectors(p.pos, closestPoint).normalize();
@@ -369,8 +372,9 @@ export class ParticleBody {
           if (cap.velocity && cap.velocity.lengthSq() > 1e-4) {
             avgVelocity.add(cap.velocity);
           } else {
-            // Empuje de rechazo elástico proporcional a la penetración
-            avgVelocity.addScaledVector(normal, penetration * 60.0);
+            // Empuje elástico suave proporcional a la penetración física (amortiguado para dedos)
+            const pushStiffness = isFingerCap ? 8.0 : 40.0;
+            avgVelocity.addScaledVector(normal, penetration * pushStiffness);
           }
         }
       }
