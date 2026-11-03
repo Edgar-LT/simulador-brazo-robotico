@@ -47,20 +47,22 @@ export class SequenceEditor {
     const homeAngles = [0, 0.20, 1.40, 0, 1.54, 0];
     this.waypoints.push({ name: "Inicio en Home", angles: homeAngles, gripper: true });
 
-    // Poses calculadas con cota exacta de descenso perpendicular (gripper apuntando vector [0, -1, 0])
-    // Ranuras ampliadas a Z = [0.45, 0.80, 1.15] (35 cm de espacio libre entre cubos)
+    // Poses calculadas con cinemática analítica exacta sobre el manipulador real:
+    // Descenso estrictamente perpendicular (tool_axis = [0, -1, 0])
+    // y articulación J6 (q5 = q0 - PI/2) orientada para que los dedos queden estrictamente paralelos a las caras de la caja
+    // Ranuras ampliadas y centradas a X = ±1.55m, Z = [0.15, 0.50, 0.85] (35 cm de espacio libre entre cubos)
     // Grab/Drop: TCP a Y = 0.99m (las yemas abrazan la caja justamente a media altura sin rozar la mesa)
-    // Approx: TCP a Y = 1.45m directamente en la misma vertical para descenso y ascenso rectilíneos
+    // Approx: TCP a Y = 1.40m directamente en la misma vertical para descenso y ascenso rectilíneos
     const posesA = [
-      { approx: [-1.326, 0.110, 1.970, 0, 1.062, 0], grab: [-1.326, 0.280, 2.070, 0, 0.792, 0] }, // Slot A1 (Z=0.45)
-      { approx: [-1.153, 0.170, 1.900, 0, 1.072, 0], grab: [-1.153, 0.330, 1.990, 0, 0.822, 0] }, // Slot A2 (Z=0.80)
-      { approx: [-1.001, 0.250, 1.800, 0, 1.092, 0], grab: [-1.001, 0.400, 1.890, 0, 0.852, 0] }  // Slot A3 (Z=1.15)
+      { approx: [-1.4743, -0.0362, 2.1544, 0, 1.0234, -3.0451], grab: [-1.4743, 0.1413, 2.2441, 0, 0.7563, -3.0451] }, // Slot A1 (Z=0.15)
+      { approx: [-1.2588,  0.0039, 2.1150, 0, 1.0227, -2.8296], grab: [-1.2588, 0.1757, 2.2022, 0, 0.7637, -2.8296] }, // Slot A2 (Z=0.50)
+      { approx: [-1.0692,  0.0793, 2.0361, 0, 1.0262, -2.6400], grab: [-1.0692, 0.2406, 2.1191, 0, 0.7819, -2.6400] }  // Slot A3 (Z=0.85)
     ];
 
     const posesB = [
-      { approx: [1.326, 0.110, 1.970, 0, 1.062, 0], drop: [1.326, 0.280, 2.070, 0, 0.792, 0] },   // Slot B1 (Z=0.45)
-      { approx: [1.153, 0.170, 1.900, 0, 1.072, 0], drop: [1.153, 0.330, 1.990, 0, 0.822, 0] },   // Slot B2 (Z=0.80)
-      { approx: [1.001, 0.250, 1.800, 0, 1.092, 0], drop: [1.001, 0.400, 1.890, 0, 0.852, 0] }    // Slot B3 (Z=1.15)
+      { approx: [1.4743, -0.0362, 2.1544, 0, 1.0234, -0.0965], drop: [1.4743, 0.1413, 2.2441, 0, 0.7563, -0.0965] },   // Slot B1 (Z=0.15)
+      { approx: [1.2588,  0.0039, 2.1150, 0, 1.0227, -0.3120], drop: [1.2588, 0.1757, 2.2022, 0, 0.7637, -0.3120] },   // Slot B2 (Z=0.50)
+      { approx: [1.0692,  0.0793, 2.0361, 0, 1.0262, -0.5016], drop: [1.0692, 0.2406, 2.1191, 0, 0.7819, -0.5016] }    // Slot B3 (Z=0.85)
     ];
 
     // --- FASE 1: IDA (MESA A -> MESA B) ---

@@ -367,7 +367,7 @@ export class RobotArm {
     this.joints[2].rotation.x = angles[2];
     this.joints[3].rotation.y = angles[3];
     this.joints[4].rotation.x = angles[4];
-    this.joints[5].rotation.z = angles[5];
+    this.joints[5].rotation.y = angles[5];
 
     for (let i = 0; i < 6; i++) {
       this.currentAngles[i] = angles[i];
@@ -384,7 +384,7 @@ export class RobotArm {
       this.joints[2].rotation.x,
       this.joints[3].rotation.y,
       this.joints[4].rotation.x,
-      this.joints[5].rotation.z
+      this.joints[5].rotation.y
     ];
   }
 
@@ -413,7 +413,7 @@ export class RobotArm {
     this.joints[2].rotation.x = this.currentAngles[2];
     this.joints[3].rotation.y = this.currentAngles[3];
     this.joints[4].rotation.x = this.currentAngles[4];
-    this.joints[5].rotation.z = this.currentAngles[5];
+    this.joints[5].rotation.y = this.currentAngles[5];
 
     this.gripper.update(delta);
     this.group.updateMatrixWorld(true);

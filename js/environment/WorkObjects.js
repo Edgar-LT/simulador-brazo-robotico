@@ -30,12 +30,13 @@ export class WorkObjects {
   }
 
   buildWorkcell() {
-    const tableWidth = 1.6;
+    // Mesas ampliadas y optimizadas dentro del radio de alcance del manipulador
+    const tableWidth = 1.4;
     const tableHeight = 0.85;
-    const tableDepth = 1.3;
+    const tableDepth = 1.5;
 
     // Mesa de Origen (Zona A) a la izquierda
-    const posA = new THREE.Vector3(-1.8, 0, 0.8);
+    const posA = new THREE.Vector3(-1.55, 0, 0.50);
     const sourceTable = this.createTable(tableWidth, tableHeight, tableDepth, posA, this.materials.tableTop, this.materials.tableLeg);
     this.tables.push(sourceTable);
     this.tableData.push({ group: sourceTable, width: tableWidth, height: tableHeight, depth: tableDepth, position: posA });
@@ -49,7 +50,7 @@ export class WorkObjects {
     }
 
     // Mesa de Destino (Zona B) a la derecha
-    const posB = new THREE.Vector3(1.8, 0, 0.8);
+    const posB = new THREE.Vector3(1.55, 0, 0.50);
     const targetTable = this.createTable(tableWidth, tableHeight, tableDepth, posB, this.materials.tableTop, this.materials.tableLeg);
     this.tables.push(targetTable);
     this.tableData.push({ group: targetTable, width: tableWidth, height: tableHeight, depth: tableDepth, position: posB });
@@ -68,14 +69,14 @@ export class WorkObjects {
 
     // Ranuras Mesa A
     slotOffsetsZ.forEach((zOff, i) => {
-      const slotPos = new THREE.Vector3(-1.8, tableTopY, 0.8 + zOff);
+      const slotPos = new THREE.Vector3(-1.55, tableTopY, 0.50 + zOff);
       this.slotsA.push(slotPos);
       this.createSlotMarker(slotPos, 0x00d2ff, `A${i + 1}`);
     });
 
     // Ranuras Mesa B
     slotOffsetsZ.forEach((zOff, i) => {
-      const slotPos = new THREE.Vector3(1.8, tableTopY, 0.8 + zOff);
+      const slotPos = new THREE.Vector3(1.55, tableTopY, 0.50 + zOff);
       this.slotsB.push(slotPos);
       this.createSlotMarker(slotPos, 0x00ff88, `B${i + 1}`);
     });
