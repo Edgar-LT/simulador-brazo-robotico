@@ -28,9 +28,26 @@ export class ControlsHUD {
       });
     });
 
-    // Botón para Plegar/Desplegar Menú
+    // Botón para Plegar/Desplegar Panel Lateral
     document.getElementById('btn-toggle-panel')?.addEventListener('click', () => {
       document.body.classList.toggle('panel-hidden');
+    });
+
+    // Ocultar / Mostrar toda la UI (Modo Inmersivo)
+    const toggleFullUI = () => {
+      document.body.classList.toggle('ui-hidden');
+    };
+
+    document.getElementById('btn-hide-ui')?.addEventListener('click', toggleFullUI);
+    document.getElementById('btn-show-ui')?.addEventListener('click', toggleFullUI);
+
+    // Atajo de teclado: Tecla 'H' para alternar visibilidad de la UI
+    window.addEventListener('keydown', (e) => {
+      // Ignorar si el usuario está escribiendo en un input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'h' || e.key === 'H') {
+        toggleFullUI();
+      }
     });
 
     // 2. Selectores de Modo (FK vs IK)

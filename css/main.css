@@ -226,11 +226,59 @@ body {
   flex-direction: column;
 }
 
-/* Ocultar panel al colapsar */
+/* Ocultar panel lateral al colapsar */
 body.panel-hidden .panel-unified {
   transform: translateX(115%);
   opacity: 0;
   pointer-events: none;
+}
+
+/* Ocultar TODA la interfaz (Modo Inmersivo) */
+body.ui-hidden .hud-header,
+body.ui-hidden .panel-unified {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-20px);
+}
+
+body.ui-hidden .panel-unified {
+  transform: translateX(115%);
+}
+
+/* Botón flotante para restaurar la interfaz */
+.floating-show-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(13, 17, 23, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-panel);
+}
+
+.floating-show-btn:hover {
+  color: var(--accent-cyan);
+  background: rgba(22, 27, 34, 0.9);
+  border-color: var(--accent-cyan);
+}
+
+body.ui-hidden .floating-show-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 /* Pestañas */
