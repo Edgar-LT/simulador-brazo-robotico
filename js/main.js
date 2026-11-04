@@ -6,7 +6,7 @@ import { RobotArm } from './robot/RobotArm.js?v=3.5';
 import { WorkObjects } from './environment/WorkObjects.js?v=3.5';
 import { TelemetryChart } from './ui/TelemetryChart.js?v=3.5';
 import { SequenceEditor } from './ui/SequenceEditor.js?v=3.5';
-import { ControlsHUD } from './ui/ControlsHUD.js?v=3.5';
+import { ControlsHUD } from './ui/ControlsHUD.js?v=4.2';
 import { TrajectoryTrail } from './robot/TrajectoryTrail.js?v=3.5';
 import { HardwareSerialBridge } from './robot/HardwareSerialBridge.js?v=3.5';
 import { PhysicsWorld } from './physics/PhysicsWorld.js?v=3.5';
@@ -65,12 +65,12 @@ class RoboTwinApp {
     this.sequenceEditor = new SequenceEditor(this.robot, this.workObjects);
     this.hud = new ControlsHUD(this.robot, this.sequenceEditor, this.telemetryChart, this.targetGizmo, this.trajectoryTrail, this);
 
-    // Activar inmediatamente por defecto la red de partículas XPBD en cajas, robot y mesas
-    this.particleWorld.setParticleLatticeVisible(true);
-    this.robotLattice.setVisible(true);
-    this.tableLattice.setVisible(true);
-    this.robot.setLatticeTransparency(true);
-    this.workObjects.setTablesTransparency(true);
+    // Inicializar visualización física (nodos XPBD apagados por defecto para una vista limpia)
+    this.particleWorld.setParticleLatticeVisible(false);
+    this.robotLattice.setVisible(false);
+    this.tableLattice.setVisible(false);
+    this.robot.setLatticeTransparency(false);
+    this.workObjects.setTablesTransparency(false);
 
     // Sincronizar posición inicial en sliders
     this.hud.syncSlidersWithRobot();

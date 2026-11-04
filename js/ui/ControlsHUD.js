@@ -206,7 +206,7 @@ export class ControlsHUD {
 
       const headerBtn = document.getElementById('btn-toggle-particles-header');
       if (headerBtn) {
-        headerBtn.innerText = active ? "⚛️ NODOS XPBD: ON" : "⚛️ NODOS XPBD: OFF";
+        headerBtn.innerText = active ? "Nodos XPBD: ON" : "Nodos XPBD: OFF";
         headerBtn.classList.toggle('active', active);
       }
     };
@@ -242,12 +242,12 @@ export class ControlsHUD {
       if (!this.app?.serialBridge) return;
       if (this.app.serialBridge.isConnected) {
         await this.app.serialBridge.disconnect();
-        btnSerial.innerText = "🔌 SERIAL USB";
+        btnSerial.innerText = "Serial USB";
         btnSerial.classList.remove('active');
       } else {
         const ok = await this.app.serialBridge.connect();
         if (ok) {
-          btnSerial.innerText = "⚡ CONECTADO (115200)";
+          btnSerial.innerText = "Conectado (115200)";
           btnSerial.classList.add('active');
         }
       }
@@ -266,14 +266,14 @@ export class ControlsHUD {
     const estopBtn = document.getElementById('btn-estop');
     if (estopBtn) {
       if (this.isEstopActive) {
-        estopBtn.innerText = "⚠️ REARMAR";
+        estopBtn.innerText = "Rearmar";
         estopBtn.classList.add('active-alarm');
         this.wasPlayingBeforeEstop = this.sequenceEditor.isPlaying;
         if (this.sequenceEditor.isPlaying) {
           this.sequenceEditor.pause();
         }
       } else {
-        estopBtn.innerText = "🛑 E-STOP";
+        estopBtn.innerText = "E-STOP";
         estopBtn.classList.remove('active-alarm');
         if (this.wasPlayingBeforeEstop) {
           this.sequenceEditor.play(true);
@@ -350,7 +350,7 @@ export class ControlsHUD {
   updateGripperButton() {
     const btn = document.getElementById('btn-toggle-gripper');
     if (btn) {
-      btn.innerText = this.robot.gripper.isOpen ? "PINZA: ABIERTA" : "PINZA: CERRADA";
+      btn.innerText = this.robot.gripper.isOpen ? "Pinza: Abierta" : "Pinza: Cerrada";
       btn.classList.toggle('active', !this.robot.gripper.isOpen);
     }
   }
@@ -358,7 +358,7 @@ export class ControlsHUD {
   updatePlayButton() {
     const btn = document.getElementById('btn-play-seq');
     if (btn) {
-      btn.innerText = this.sequenceEditor.isPlaying ? "DETENER" : "REPRODUCIR";
+      btn.innerText = this.sequenceEditor.isPlaying ? "Detener" : "Reproducir";
       btn.classList.toggle('active', this.sequenceEditor.isPlaying);
     }
   }
@@ -421,25 +421,25 @@ export class ControlsHUD {
     if (this.isEstopActive) {
       if (alertBadge) {
         alertBadge.className = 'alert-status warning';
-        alertBadge.innerHTML = '<span>🛑 PARADA DE EMERGENCIA ACTIVA</span>';
+        alertBadge.innerHTML = '<span>Parada de emergencia activa</span>';
       }
       this.robot.setLedStatus(0xff0000);
     } else if (nearLimit) {
       if (alertBadge) {
         alertBadge.className = 'alert-status warning';
-        alertBadge.innerHTML = '<span>⚠️ LÍMITE ARTICULAR PRÓXIMO</span>';
+        alertBadge.innerHTML = '<span>Límite articular próximo</span>';
       }
       this.robot.setLedStatus(0xff6b00);
     } else if (nearSingularity) {
       if (alertBadge) {
         alertBadge.className = 'alert-status warning';
-        alertBadge.innerHTML = '<span>⚡ SINGULARIDAD DE EXTENSIÓN</span>';
+        alertBadge.innerHTML = '<span>Singularidad de extensión</span>';
       }
       this.robot.setLedStatus(0xffaa00);
     } else {
       if (alertBadge) {
         alertBadge.className = 'alert-status normal';
-        alertBadge.innerHTML = '<span>ESTADO: SEGURO (ZONA OPERATIVA)</span>';
+        alertBadge.innerHTML = '<span>Estado: Seguro (Zona Operativa)</span>';
       }
       this.robot.setLedStatus(0x00f0ff);
     }
