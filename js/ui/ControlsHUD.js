@@ -227,32 +227,6 @@ export class ControlsHUD {
       this.trajectoryTrail?.setVisible(e.target.checked);
     });
 
-    // Modal D-H
-    const modalDh = document.getElementById('modal-dh');
-    document.getElementById('btn-toggle-dh')?.addEventListener('click', () => {
-      if (modalDh) modalDh.style.display = 'flex';
-    });
-    document.getElementById('btn-close-dh')?.addEventListener('click', () => {
-      if (modalDh) modalDh.style.display = 'none';
-    });
-
-    // Serial USB
-    const btnSerial = document.getElementById('btn-toggle-serial');
-    btnSerial?.addEventListener('click', async () => {
-      if (!this.app?.serialBridge) return;
-      if (this.app.serialBridge.isConnected) {
-        await this.app.serialBridge.disconnect();
-        btnSerial.innerText = "Serial USB";
-        btnSerial.classList.remove('active');
-      } else {
-        const ok = await this.app.serialBridge.connect();
-        if (ok) {
-          btnSerial.innerText = "Conectado (115200)";
-          btnSerial.classList.add('active');
-        }
-      }
-    });
-
     this.sequenceEditor.onStatusChange = () => {
       this.updatePlayButton();
       this.renderWaypointList();
@@ -444,8 +418,16 @@ export class ControlsHUD {
       this.robot.setLedStatus(0x00f0ff);
     }
 
-    if (this.app?.serialBridge?.isConnected) {
-      this.app.serialBridge.sendAngles(this.robot.currentAngles, this.robot.gripper.isOpen);
+    // Actualizar parámetros Denavit-Hartenberg (D-H) en tiempo real
+    for (let i = 0; i < 6; i++) {
+      const row = document.getElementById(`dh-row-${i + 1}`);
+      if (row) {
+        const thetaCell = row.querySelector('.dh-theta');
+        if (thetaCell) {
+          const deg = MathUtils.radToDeg(angles[i]);
+          thetaCell.innerText = `${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°`;
+        }
+      }
     }
 
     if (this.mode !== 'manual') {

@@ -8,7 +8,6 @@ import { TelemetryChart } from './ui/TelemetryChart.js?v=3.5';
 import { SequenceEditor } from './ui/SequenceEditor.js?v=3.5';
 import { ControlsHUD } from './ui/ControlsHUD.js?v=4.2';
 import { TrajectoryTrail } from './robot/TrajectoryTrail.js?v=3.5';
-import { HardwareSerialBridge } from './robot/HardwareSerialBridge.js?v=3.5';
 import { PhysicsWorld } from './physics/PhysicsWorld.js?v=3.5';
 import { ParticlePhysicsWorld } from './physics/ParticlePhysicsWorld.js?v=3.5';
 import { RobotParticleLattice } from './physics/RobotParticleLattice.js?v=3.5';
@@ -50,9 +49,6 @@ class RoboTwinApp {
 
     // Entramado de partículas y átomos de las mesas de trabajo
     this.tableLattice = new TableParticleLattice(this.scene, this.workObjects.tableData);
-
-    // Puente de Hardware Serial con microcontroladores (Arduino / ESP32)
-    this.serialBridge = new HardwareSerialBridge(this.robot);
 
     // Trazador 3D de Trayectoria del TCP
     this.trajectoryTrail = new TrajectoryTrail(this.scene);
