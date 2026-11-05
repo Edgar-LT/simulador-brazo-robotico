@@ -174,7 +174,7 @@ class RoboTwinApp {
 
     // 7. Actualizar datos del osciloscopio y HUD
     this.telemetryChart.addDataPoint(this.robot);
-    this.hud.updateTelemetryHUD();
+    this.hud.updateTelemetryHUD(delta);
 
     // 8. Controles orbitales
     this.controls.update();

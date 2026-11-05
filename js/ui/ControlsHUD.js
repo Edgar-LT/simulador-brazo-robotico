@@ -11,6 +11,8 @@ export class ControlsHUD {
 
     this.mode = 'manual'; // 'manual' | 'ik' | 'sequence'
     this.isEstopActive = false;
+    this.telemetryThrottleTimer = 0;
+    this.TELEMETRY_INTERVAL = 0.08; // Actualización DOM desacoplada a 12.5 Hz para evitar Layout Thrashing
     this.bindDOM();
   }
 
@@ -42,13 +44,14 @@ export class ControlsHUD {
     document.getElementById('btn-show-ui')?.addEventListener('click', toggleFullUI);
 
     // Atajo de teclado: Tecla 'H' para alternar visibilidad de la UI
-    window.addEventListener('keydown', (e) => {
+    this.boundKeyHandler = (e) => {
       // Ignorar si el usuario está escribiendo en un input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'h' || e.key === 'H') {
         toggleFullUI();
       }
-    });
+    };
+    window.addEventListener('keydown', this.boundKeyHandler);
 
     // 2. Selectores de Modo (FK vs IK)
     const btnManual = document.getElementById('btn-mode-manual');
@@ -370,7 +373,17 @@ export class ControlsHUD {
     });
   }
 
-  updateTelemetryHUD() {
+  updateTelemetryHUD(delta = 0.016) {
+    if (this.mode !== 'manual') {
+      this.syncSlidersWithRobot();
+    }
+
+    this.telemetryThrottleTimer += delta;
+    if (this.telemetryThrottleTimer < this.TELEMETRY_INTERVAL) {
+      return;
+    }
+    this.telemetryThrottleTimer = 0;
+
     const fk = this.robot.kinematics.getForwardKinematics();
     const pos = fk.position;
 
@@ -446,9 +459,12 @@ export class ControlsHUD {
         }
       }
     }
+  }
 
-    if (this.mode !== 'manual') {
-      this.syncSlidersWithRobot();
+  dispose() {
+    if (this.boundKeyHandler) {
+      window.removeEventListener('keydown', this.boundKeyHandler);
+      this.boundKeyHandler = null;
     }
   }
 }

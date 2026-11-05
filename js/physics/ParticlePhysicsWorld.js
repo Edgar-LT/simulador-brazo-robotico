@@ -11,6 +11,9 @@ export class ParticlePhysicsWorld {
     this.tables = [];
     this.robotCapsules = []; // Cápsulas de colisión de los eslabones del brazo robótico
     this.showParticleLattice = false;
+    this.physicsAccumulator = 0;
+    this.fixedDt = 1 / 60; // 60 Hz física base determinista
+    this.substeps = 8; // 8 sub-pasos XPBD por cada paso de 1/60s (480 Hz)
 
     // Visualizador de nodos con líneas conectadas
     this.latticeVisualizer = new ParticleLatticeVisualizer(this.scene, {
@@ -48,12 +51,34 @@ export class ParticlePhysicsWorld {
   }
 
   step(delta, gripper = null) {
-    // 8 sub-pasos por fotograma para estabilidad ultra alta tipo Blender Physics
-    const substeps = 8;
-    // Acotar dt con un piso mínimo seguro para evitar divisiones por cero en el primer fotograma
-    const safeDelta = Math.max(0.005, Math.min(delta, 0.033));
-    const dt = safeDelta / substeps;
+    // Acotar delta para evitar la "espiral de la muerte" tras suspensión de pestaña o frame drops severos
+    const clampedDelta = Math.min(Math.max(0.001, delta), 0.1);
+    this.physicsAccumulator += clampedDelta;
 
+    const subDt = this.fixedDt / this.substeps;
+    let stepped = false;
+
+    // Consumir el acumulador en pasos fijos de 1/60s (máximo 3 pasos por frame para proteger el presupuesto de tiempo)
+    let stepsProcessed = 0;
+    while (this.physicsAccumulator >= this.fixedDt && stepsProcessed < 3) {
+      this.stepSubsteps(subDt, this.substeps, gripper);
+      this.physicsAccumulator -= this.fixedDt;
+      stepsProcessed++;
+      stepped = true;
+    }
+
+    // Si aún queda residuo grande tras el límite de pasos, descartar exceso para no desfasar
+    if (this.physicsAccumulator > this.fixedDt) {
+      this.physicsAccumulator = 0;
+    }
+
+    // Actualización de la representación visual y deformación (una sola vez por render frame)
+    if (stepped || delta > 0) {
+      this.updateRenderRepresentation();
+    }
+  }
+
+  stepSubsteps(dt, substeps, gripper) {
     for (let s = 0; s < substeps; s++) {
       for (let b = 0; b < this.bodies.length; b++) {
         const body = this.bodies[b];
@@ -88,9 +113,6 @@ export class ParticlePhysicsWorld {
       // 8. Colisión física y empuje del robot hacia las mesas de trabajo
       this.solveTableRobotInteractions(dt);
     }
-
-    // Actualización de la representación visual y deformación
-    this.updateRenderRepresentation();
   }
 
   updateRenderRepresentation() {

@@ -1,4 +1,5 @@
 import { MathUtils } from '../utils/MathUtils.js';
+import { IndustrialProgramExporter } from '../robot/IndustrialProgramExporter.js';
 
 export class SequenceEditor {
   constructor(robot, workObjects) {
@@ -106,63 +107,15 @@ export class SequenceEditor {
   }
 
   exportProgramJSON() {
-    const data = {
-      robot: "RoboTwin 6-DOF",
-      exportDate: new Date().toISOString(),
-      waypoints: this.waypoints
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `robot_routine_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    IndustrialProgramExporter.exportJSON(this.waypoints, "RoboTwin 6-DOF");
   }
 
   exportProgramGCode() {
-    let gcode = `; ==========================================\n`;
-    gcode += `; RoboTwin 6-DOF Industrial G-Code Export\n`;
-    gcode += `; Generated: ${new Date().toLocaleString()}\n`;
-    gcode += `; ==========================================\n`;
-    gcode += `G21 ; Unidades en mm\nG90 ; Absolutas\nM17 ; Energizar\n\n`;
-
-    this.waypoints.forEach((wp, idx) => {
-      const degs = wp.angles.map(a => (a * 180 / Math.PI).toFixed(2));
-      gcode += `; Paso #${idx + 1}: ${wp.name}\n`;
-      gcode += `G01 A${degs[0]} B${degs[1]} C${degs[2]} D${degs[3]} E${degs[4]} F${degs[5]} F1500\n`;
-      gcode += wp.gripper ? `M05 ; Abrir Pinza\n` : `M03 ; Cerrar Pinza\n`;
-      gcode += `G04 P400\n\n`;
-    });
-
-    gcode += `M18 ; Fin de ciclo\n`;
-    const blob = new Blob([gcode], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `robot_program_${Date.now()}.gcode`;
-    a.click();
-    URL.revokeObjectURL(url);
+    IndustrialProgramExporter.exportGCode(this.waypoints);
   }
 
   exportProgramRAPID() {
-    let rapid = `MODULE RoboTwinModule\n  PROC main()\n`;
-    this.waypoints.forEach((wp, idx) => {
-      const degs = wp.angles.map(a => (a * 180 / Math.PI).toFixed(2));
-      rapid += `    ! ${wp.name}\n`;
-      rapid += `    MoveAbsJ [[${degs.join(', ')}], [9E9,9E9,9E9,9E9,9E9,9E9]], v500, fine, tool0;\n`;
-      rapid += wp.gripper ? `    Reset do_GripperClose;\n    Set do_GripperOpen;\n` : `    Reset do_GripperOpen;\n    Set do_GripperClose;\n`;
-      rapid += `    WaitTime 0.4;\n\n`;
-    });
-    rapid += `  ENDPROC\nENDMODULE\n`;
-
-    const blob = new Blob([rapid], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `robot_routine_${Date.now()}.mod`;
-    a.click();
-    URL.revokeObjectURL(url);
+    IndustrialProgramExporter.exportRAPID(this.waypoints);
   }
 
   importProgramJSON(jsonString) {
