@@ -130,8 +130,8 @@ export class ParticlePhysicsWorld {
         if (!pA || !pB) continue;
         const radius = cap.radius || 0.12;
 
-        // Comprobación de puntos clave a lo largo del segmento de la cápsula
-        const steps = 3;
+        // Comprobación de alta resolución a lo largo del segmento de la cápsula (antitumeling)
+        const steps = 7;
         for (let s = 0; s <= steps; s++) {
           const alpha = s / steps;
           const px = pA.x + (pB.x - pA.x) * alpha;

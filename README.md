@@ -13,7 +13,7 @@
 
 ### 🦾 Cinemática y Robótica Aplicada (Nivel Profesional)
 - **Cinemática Directa (Forward Kinematics - FK)**: Cálculo matricial y geométrico en tiempo real con modelado estandarizado según la convención **Denavit-Hartenberg (D-H)**. Incluye modal interactivo con la tabla formal de parámetros $(d_i, a_i, \alpha_i, \theta_i)$.
-- **Cinemática Inversa (Inverse Kinematics - IK CCD) Zero-GC**: Algoritmo cíclico desacoplado optimizado con pool estático de vectores, libre de fugas de memoria y caídas de frames por recolección de basura.
+- **Cinemática Inversa (Inverse Kinematics - IK CCD) Zero-GC**: Algoritmo cíclico desacoplado optimizado con pool estático de vectores y array articular pre-asignado (`this.jointOrder`), libre de fugas de memoria y caídas de frames por recolección de basura. Resuelve la posición espacial $(X, Y, Z)$ del TCP junto a la flexión de muñeca (Pitch), manteniendo desacopladas las torsiones axiales (Roll de J4 y J6) para manipulación fluida sin bloqueos gimnásticos.
 - **Protección Física contra Suelo y Obstáculos ($Y \ge 0.15\text{ m}$)**: El manipulador y el Gizmo 3D restringen activamente la cota vertical para evitar colisiones mecánicas con la bancada.
 - **Detección Dinámica de Singularidades y Límites Articulares**: Monitoreo continuo a 60 Hz que alerta visualmente en el HUD y cambia el color de los ribetes LED del robot (Cian $\rightarrow$ Naranja $\rightarrow$ Rojo) cuando se aproxima a extremos angulares o singularidades de extensión.
 - **Trazador 3D de Trayectorias (Trajectory Trail)**: Visualización en tiempo real de las curvas de interpolación espacial del Tool Center Point para análisis de suavidad cinemática.
@@ -29,7 +29,7 @@
   - **G-Code estándar** (`G01`, `M03`, `M05`, `G04`).
   - **ABB RAPID** (`MoveAbsJ`, `Set do_Gripper`).
   - **JSON de waypoints** para intercambio y carga rápida.
-- **Conexión Serial con Hardware Real (Web Serial API)**: Conexión plug-and-play vía USB a 115200 baudios con microcontroladores **Arduino** o **ESP32** para controlar servomotores físicos en paralelo.
+- **Conexión Serial con Hardware Real (Web Serial API)**: Conexión plug-and-play vía USB a 115200 baudios con microcontroladores **Arduino** o **ESP32** para controlar servomotores físicos en paralelo. Incluye estrangulamiento adaptativo a 30 Hz para prevenir desbordamiento de búfer UART, transmisión delta y suma de comprobación XOR de 8 bits en cada trama (`<deg1,...,deg6,grip*CHECKSUM>\n`).
 
 ### 🎨 Gráficos 3D de Alta Fidelidad
 - Renderizado PBR (Physically Based Rendering) con materiales metálicos y acabados pulidos estilo KUKA / Fanuc.

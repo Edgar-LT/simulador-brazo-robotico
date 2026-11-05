@@ -1,7 +1,7 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import { MathUtils } from '../utils/MathUtils.js';
 
-// Pool de variables temporales estáticas reutilizables para CERO asignación en memoria (Zero-GC)
+// Pool de variables temporales estáticas reutilizables para CERO asignación en memoria (Zero-GC real)
 const _targetClamped = new THREE.Vector3();
 const _basePos = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -14,6 +14,10 @@ const _toTarget = new THREE.Vector3();
 const _projTcp = new THREE.Vector3();
 const _projTarget = new THREE.Vector3();
 const _cross = new THREE.Vector3();
+
+// Ejes canónicos inmutables pre-asignados
+const AXIS_X = Object.freeze(new THREE.Vector3(1, 0, 0));
+const AXIS_Y = Object.freeze(new THREE.Vector3(0, 1, 0));
 
 // Vectores auxiliares para FK
 const _tcpVec = new THREE.Vector3();
@@ -37,6 +41,15 @@ export class Kinematics {
       { joint: "J4 (Muñeca R)",  d: link3Length + link4Length,         a: 0,           alpha: -Math.PI / 2 },
       { joint: "J5 (Muñeca P)",  d: 0,                                 a: 0,           alpha: Math.PI / 2 },
       { joint: "J6 (Herramienta)", d: link5Length + gripperLength,     a: 0,           alpha: 0 }
+    ];
+
+    // Array estático pre-asignado para Zero-GC absoluto en solveIK()
+    const joints = this.robot.joints;
+    this.jointOrder = [
+      { joint: joints[4], axis: AXIS_X, idx: 4 }, // Wrist Pitch
+      { joint: joints[2], axis: AXIS_X, idx: 2 }, // Elbow Pitch
+      { joint: joints[1], axis: AXIS_X, idx: 1 }, // Shoulder Pitch
+      { joint: joints[0], axis: AXIS_Y, idx: 0 }  // Base Yaw
     ];
   }
 
@@ -99,13 +112,8 @@ export class Kinematics {
       _targetClamped.copy(_basePos).addScaledVector(_dir, maxReach * 0.96);
     }
 
-    // Articulaciones involucradas en el lazo cinemático CCD
-    const jointOrder = [
-      { joint: joints[4], axis: new THREE.Vector3(1, 0, 0), idx: 4 }, // Wrist Pitch
-      { joint: joints[2], axis: new THREE.Vector3(1, 0, 0), idx: 2 }, // Elbow Pitch
-      { joint: joints[1], axis: new THREE.Vector3(1, 0, 0), idx: 1 }, // Shoulder Pitch
-      { joint: joints[0], axis: new THREE.Vector3(0, 1, 0), idx: 0 }  // Base Yaw
-    ];
+    // Articulaciones involucradas en el lazo cinemático CCD (Reutiliza array pre-asignado Zero-GC)
+    const jointOrder = this.jointOrder;
 
     for (let iter = 0; iter < maxIterations; iter++) {
       tcp.getWorldPosition(_currentTcpPos);
