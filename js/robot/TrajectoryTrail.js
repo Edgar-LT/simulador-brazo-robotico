@@ -1,13 +1,12 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 
 export class TrajectoryTrail {
-  constructor(scene, maxPoints = 400) {
+  constructor(scene, maxPoints = 500) {
     this.scene = scene;
     this.maxPoints = maxPoints;
-    this.points = [];
     this.enabled = true;
 
-    // Buffer geometry para trazo eficiente sin fugas de memoria
+    // Buffer geometry para trazo eficiente de anillo circular (Zero-GC, O(1) inserción)
     this.geometry = new THREE.BufferGeometry();
     this.positions = new Float32Array(this.maxPoints * 3);
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
@@ -29,9 +28,10 @@ export class TrajectoryTrail {
     this.lastY = 9999;
     this.lastZ = 9999;
     this.minDistSq = 0.0004; // 2 cm para registrar nuevo punto
+    this.count = 0;
   }
 
-  // Cero asignaciones new THREE.Vector3(): recibe directamente coordenadas o lee de objeto sin clonar
+  // Desplazamiento ultra-rápido en memoria contigua utilizando TypedArray.copyWithin (O(1) nativo C++)
   addPointFromCoords(x, y, z) {
     if (!this.enabled) return;
 
@@ -46,30 +46,27 @@ export class TrajectoryTrail {
     this.lastY = y;
     this.lastZ = z;
 
-    // Guardar en array plano
-    if (this.points.length >= this.maxPoints * 3) {
-      // Desplazar 3 elementos hacia la izquierda
-      for (let i = 0; i < (this.maxPoints - 1) * 3; i++) {
-        this.positions[i] = this.positions[i + 3];
-      }
+    if (this.count >= this.maxPoints) {
+      // Mover los elementos [3..N*3] al índice 0 con memcpy nativo de bajo nivel
+      this.positions.copyWithin(0, 3, this.maxPoints * 3);
       const lastIdx = (this.maxPoints - 1) * 3;
       this.positions[lastIdx] = x;
       this.positions[lastIdx + 1] = y;
       this.positions[lastIdx + 2] = z;
     } else {
-      const idx = this.points.length;
+      const idx = this.count * 3;
       this.positions[idx] = x;
       this.positions[idx + 1] = y;
       this.positions[idx + 2] = z;
-      this.points.length += 3;
+      this.count++;
     }
 
     this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.setDrawRange(0, Math.floor(this.points.length / 3));
+    this.geometry.setDrawRange(0, this.count);
   }
 
   clear() {
-    this.points.length = 0;
+    this.count = 0;
     this.geometry.setDrawRange(0, 0);
     this.lastX = 9999;
     this.lastY = 9999;

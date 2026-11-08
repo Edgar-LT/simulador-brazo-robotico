@@ -1,6 +1,9 @@
 import { MathUtils } from '../utils/MathUtils.js';
 import { IndustrialProgramExporter } from '../robot/IndustrialProgramExporter.js';
 
+// Buffer persistente para interpolación Zero-GC en cada tick de secuencia
+const _interpAngles = new Float64Array(6);
+
 export class SequenceEditor {
   constructor(robot, workObjects) {
     this.robot = robot;
@@ -38,8 +41,7 @@ export class SequenceEditor {
     if (this.onStatusChange) this.onStatusChange();
   }
 
-  // Genera la secuencia completa multi-caja con cinemática analítica exacta:
-  // El gripper desciende perpendicularmente sobre cada ranura A1..A3 y B1..B3
+  // Genera la secuencia completa multi-caja con cinemática analítica exacta
   loadMultiBoxBidirectionalRoutine() {
     this.stepDuration = 1.9;
     this.waypoints = [];
@@ -48,12 +50,6 @@ export class SequenceEditor {
     const homeAngles = [0, 0.20, 1.40, 0, 1.54, 0];
     this.waypoints.push({ name: "Inicio en Home", angles: homeAngles, gripper: true });
 
-    // Poses calculadas con cinemática analítica exacta sobre el manipulador real:
-    // Descenso estrictamente perpendicular (tool_axis = [0, -1, 0])
-    // y articulación J6 (q5 = q0 - PI/2) orientada para que los dedos queden estrictamente paralelos a las caras de la caja
-    // Ranuras ampliadas y centradas a X = ±1.55m, Z = [0.15, 0.50, 0.85] (35 cm de espacio libre entre cubos)
-    // Grab/Drop: TCP a Y = 0.99m (las yemas abrazan la caja justamente a media altura sin rozar la mesa)
-    // Approx: TCP a Y = 1.40m directamente en la misma vertical para descenso y ascenso rectilíneos
     const posesA = [
       { approx: [-1.4743, -0.0362, 2.1544, 0, 1.0234, -3.0451], grab: [-1.4743, 0.1413, 2.2441, 0, 0.7563, -3.0451] }, // Slot A1 (Z=0.15)
       { approx: [-1.2588,  0.0039, 2.1150, 0, 1.0227, -2.8296], grab: [-1.2588, 0.1757, 2.2022, 0, 0.7637, -2.8296] }, // Slot A2 (Z=0.50)
@@ -143,13 +139,11 @@ export class SequenceEditor {
     if (this.onStatusChange) this.onStatusChange();
   }
 
-  // Pausa temporal (utilizada por E-STOP para reanudar sin resetear)
   pause() {
     this.isPlaying = false;
     if (this.onStatusChange) this.onStatusChange();
   }
 
-  // Detención completa: resetea al paso 0 y libera objetos si había alguno sujeto
   stop() {
     this.isPlaying = false;
     this.currentStep = 0;
@@ -169,24 +163,21 @@ export class SequenceEditor {
     const nextIdx = (this.currentStep + 1) % this.waypoints.length;
     const toWp = this.waypoints[nextIdx];
 
+    // Interpolación S-Curve (Quintic Smootherstep: C2-continuo, sin saltos de aceleración/jerk)
     const smoothAlpha = MathUtils.smootherstep(Math.min(1.0, this.stepProgress));
 
-    const interpAngles = [];
     for (let i = 0; i < 6; i++) {
-      interpAngles.push(MathUtils.lerp(fromWp.angles[i], toWp.angles[i], smoothAlpha));
+      _interpAngles[i] = MathUtils.lerp(fromWp.angles[i], toWp.angles[i], smoothAlpha);
     }
-    this.robot.setTargetJointAngles(interpAngles);
+    this.robot.setTargetJointAngles(_interpAngles);
 
     if (this.stepProgress >= 1.0) {
       this.stepProgress = 0;
       this.currentStep = nextIdx;
 
-      // Acciones de pinza con detección física de presencia de cajas
+      // Acciones de pinza con detección física comprobada
       if (toWp.action === 'grab' && this.workObjects) {
-        // Buscar si existe físicamente una caja entre los dedos en este instante
         const detectedBox = this.robot.gripper.findNearbyObject(this.workObjects.boxes || []);
-        
-        // Ajustar el cierre al ancho de la caja si hay una presente, o cerrar completamente en vacío si no hay caja
         this.robot.gripper.close(detectedBox);
         if (detectedBox) {
           this.robot.gripper.grabObject(detectedBox);
