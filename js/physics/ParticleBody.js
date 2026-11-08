@@ -1,6 +1,25 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 
-// Implementación de cuerpo volumétrico XPBD (Extended Position Based Dynamics)
+// Pool de variables estáticas reutilizables para todo ParticleBody (Zero-GC en 480 Hz)
+const _dir = new THREE.Vector3();
+const _centerL = new THREE.Vector3();
+const _centerR = new THREE.Vector3();
+const _pushVec = new THREE.Vector3();
+const _pushDir = new THREE.Vector3();
+const _c0 = new THREE.Vector3();
+const _c1 = new THREE.Vector3();
+const _c2 = new THREE.Vector3();
+const _rotMat = new THREE.Matrix4();
+const _tempQuat = new THREE.Quaternion();
+const _goalPos = new THREE.Vector3();
+const _netDisplacement = new THREE.Vector3();
+const _avgVelocity = new THREE.Vector3();
+const _closestPoint = new THREE.Vector3();
+const _normal = new THREE.Vector3();
+const _bodyPush = new THREE.Vector3();
+const _capSeg = new THREE.Line3();
+
+// Implementación de cuerpo volumétrico XPBD (Extended Position Based Dynamics) de alto rendimiento
 export class ParticleBody {
   constructor(initialPosition, size = 0.15, config = {}) {
     this.size = size;
@@ -25,8 +44,6 @@ export class ParticleBody {
     this.isClamped = false;
     this.tempBoxL = new THREE.Box3();
     this.tempBoxR = new THREE.Box3();
-    this.accumLinkPush = new THREE.Vector3();
-    this.collidingLinkCount = 0;
 
     this.initParticles(initialPosition, size);
     this.buildDistanceConstraints();
@@ -143,7 +160,7 @@ export class ParticleBody {
   }
 
   integrate(dt, gravity) {
-    if (this.isClamped) return; // Si la pinza traslada la caja, omitir aceleración gravitacional suelta
+    if (this.isClamped) return;
 
     this.contactNormalForce = 0.0;
 
@@ -167,17 +184,17 @@ export class ParticleBody {
     if (this.isClamped) return;
 
     const alpha = this.compliance / (dt * dt);
-    const dir = new THREE.Vector3();
 
     for (let c = 0; c < this.distanceConstraints.length; c++) {
       const constraint = this.distanceConstraints[c];
       const p1 = this.particles[constraint.p1];
       const p2 = this.particles[constraint.p2];
 
-      dir.subVectors(p1.pos, p2.pos);
-      const len = dir.length();
-      if (len < 1e-7) continue;
+      _dir.subVectors(p1.pos, p2.pos);
+      const lenSq = _dir.lengthSq();
+      if (lenSq < 1e-12) continue;
 
+      const len = Math.sqrt(lenSq);
       const C = len - constraint.restLength;
       const w1 = p1.invMass;
       const w2 = p2.invMass;
@@ -187,9 +204,9 @@ export class ParticleBody {
       const deltaLambda = (-C - alpha * constraint.lambda) / (wSum + alpha);
       constraint.lambda += deltaLambda;
 
-      dir.multiplyScalar(1.0 / len);
-      p1.pos.addScaledVector(dir, w1 * deltaLambda);
-      p2.pos.addScaledVector(dir, -w2 * deltaLambda);
+      _dir.multiplyScalar(deltaLambda / len);
+      p1.pos.addScaledVector(_dir, w1);
+      p2.pos.addScaledVector(_dir, -w2);
     }
   }
 
@@ -198,7 +215,9 @@ export class ParticleBody {
 
     this.centerOfMass.set(0, 0, 0);
     let totalMass = 0;
-    for (let i = 0; i < this.particles.length; i++) {
+    const n = this.particles.length;
+
+    for (let i = 0; i < n; i++) {
       const p = this.particles[i];
       this.centerOfMass.addScaledVector(p.pos, p.mass);
       totalMass += p.mass;
@@ -209,7 +228,7 @@ export class ParticleBody {
     let a10 = 0, a11 = 0, a12 = 0;
     let a20 = 0, a21 = 0, a22 = 0;
 
-    for (let i = 0; i < this.particles.length; i++) {
+    for (let i = 0; i < n; i++) {
       const p = this.particles[i];
       const qx = p.pos.x - this.centerOfMass.x;
       const qy = p.pos.y - this.centerOfMass.y;
@@ -224,33 +243,41 @@ export class ParticleBody {
       a20 += m * qz * r0x; a21 += m * qz * r0y; a22 += m * qz * r0z;
     }
 
-    // 1. Matriz de covarianza de deformación A = sum(m * q * r0^T)
-    const c0 = new THREE.Vector3(a00, a10, a20);
-    const c1 = new THREE.Vector3(a01, a11, a21);
+    _c0.set(a00, a10, a20);
+    _c1.set(a01, a11, a21);
 
-    // Ortonormalización Gram-Schmidt robusta para extraer la rotación pura R
-    if (c0.lengthSq() > 1e-8 && c1.lengthSq() > 1e-8) {
-      c0.normalize();
-      const dot = c0.dot(c1);
-      c1.sub(c0.clone().multiplyScalar(dot)).normalize();
-      const c2 = new THREE.Vector3().crossVectors(c0, c1).normalize();
+    const lenC0Sq = _c0.lengthSq();
+    const lenC1Sq = _c1.lengthSq();
 
-      const rotMat = new THREE.Matrix4().makeBasis(c0, c1, c2);
-      const quat = new THREE.Quaternion().setFromRotationMatrix(rotMat).normalize();
+    // Ortonormalización Gram-Schmidt con salvaguarda robusta contra colinealidad/aplastamiento
+    if (lenC0Sq > 1e-7 && lenC1Sq > 1e-7) {
+      _c0.multiplyScalar(1.0 / Math.sqrt(lenC0Sq));
+      const dot = _c0.dot(_c1);
+      _c1.addScaledVector(_c0, -dot);
+      const lenC1OrthSq = _c1.lengthSq();
 
-      if (!isNaN(quat.x) && !isNaN(quat.y) && !isNaN(quat.z) && !isNaN(quat.w) && quat.lengthSq() > 0.5) {
-        this.orientation.slerp(quat, 0.45).normalize();
+      if (lenC1OrthSq > 1e-7) {
+        _c1.multiplyScalar(1.0 / Math.sqrt(lenC1OrthSq));
+        _c2.crossVectors(_c0, _c1).normalize();
+
+        _rotMat.makeBasis(_c0, _c1, _c2);
+        _tempQuat.setFromRotationMatrix(_rotMat);
+
+        if (Number.isFinite(_tempQuat.x) && _tempQuat.lengthSq() > 0.5) {
+          _tempQuat.normalize();
+          this.orientation.slerp(_tempQuat, 0.45).normalize();
+        }
       }
     } else {
       this.orientation.normalize();
     }
 
-    // 2. Proyección de goalPos mediante cuaternión estrictamente normalizado
-    const goalPos = new THREE.Vector3();
-    for (let i = 0; i < this.particles.length; i++) {
+    // Proyección elástica hacia la forma de reposo
+    const stiffness = this.shapeStiffness * 0.4;
+    for (let i = 0; i < n; i++) {
       const p = this.particles[i];
-      goalPos.copy(p.restPos).applyQuaternion(this.orientation).add(this.centerOfMass);
-      p.pos.lerp(goalPos, this.shapeStiffness * 0.4);
+      _goalPos.copy(p.restPos).applyQuaternion(this.orientation).add(this.centerOfMass);
+      p.pos.lerp(_goalPos, stiffness);
     }
   }
 
@@ -270,7 +297,7 @@ export class ParticleBody {
         p.vel.z *= Math.max(0, 1 - friction * 0.5);
       }
 
-      // Colisión contra las mesas (superficie superior y contorno volumétrico)
+      // Colisión contra las mesas
       for (let t = 0; t < tables.length; t++) {
         const table = tables[t];
         const minX = table.x - table.w / 2;
@@ -279,9 +306,7 @@ export class ParticleBody {
         const maxZ = table.z + table.d / 2;
         const topY = table.topY;
 
-        // Si la partícula está dentro del perímetro horizontal del tablero
         if (p.pos.x >= minX - 0.05 && p.pos.x <= maxX + 0.05 && p.pos.z >= minZ - 0.05 && p.pos.z <= maxZ + 0.05) {
-          // Si está penetrando el tablero superior hacia abajo
           if (p.pos.y - p.radius < topY && p.pos.y > topY - 0.40) {
             p.pos.y = topY + p.radius;
             if (p.vel.y < 0) {
@@ -298,7 +323,6 @@ export class ParticleBody {
   interactWithGripperFingers(gripper, dt) {
     if (this.isClamped) return;
     if (!gripper || !gripper.fingerLeftMesh || !gripper.fingerRightMesh) return;
-    // Si la pinza está abierta para preparar la sujeción, permitimos que los dedos abracen la caja sin empujarla
     if (gripper.isOpen) return;
 
     gripper.fingerLeftMesh.updateMatrixWorld(true);
@@ -306,32 +330,32 @@ export class ParticleBody {
     const fingerLBox = this.tempBoxL.setFromObject(gripper.fingerLeftMesh);
     const fingerRBox = this.tempBoxR.setFromObject(gripper.fingerRightMesh);
 
-    const centerL = fingerLBox.getCenter(new THREE.Vector3());
-    const centerR = fingerRBox.getCenter(new THREE.Vector3());
-    const pushVec = new THREE.Vector3();
+    fingerLBox.getCenter(_centerL);
+    fingerRBox.getCenter(_centerR);
+    _pushVec.set(0, 0, 0);
 
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
 
       if (fingerLBox.containsPoint(p.pos)) {
-        const pushDir = new THREE.Vector3().subVectors(p.pos, centerL).normalize();
-        p.pos.addScaledVector(pushDir, 0.008);
-        pushVec.addScaledVector(pushDir, 0.005);
-        p.vel.multiplyScalar(0.7); // Disipar energía parásita
+        _pushDir.subVectors(p.pos, _centerL).normalize();
+        p.pos.addScaledVector(_pushDir, 0.008);
+        _pushVec.addScaledVector(_pushDir, 0.005);
+        p.vel.multiplyScalar(0.7);
       }
 
       if (fingerRBox.containsPoint(p.pos)) {
-        const pushDir = new THREE.Vector3().subVectors(p.pos, centerR).normalize();
-        p.pos.addScaledVector(pushDir, 0.008);
-        pushVec.addScaledVector(pushDir, 0.005);
-        p.vel.multiplyScalar(0.7); // Disipar energía parásita
+        _pushDir.subVectors(p.pos, _centerR).normalize();
+        p.pos.addScaledVector(_pushDir, 0.008);
+        _pushVec.addScaledVector(_pushDir, 0.005);
+        p.vel.multiplyScalar(0.7);
       }
     }
 
-    if (pushVec.lengthSq() > 1e-6) {
-      this.centerOfMass.add(pushVec);
+    if (_pushVec.lengthSq() > 1e-6) {
+      this.centerOfMass.add(_pushVec);
       for (let i = 0; i < this.particles.length; i++) {
-        this.particles[i].pos.add(pushVec);
+        this.particles[i].pos.add(_pushVec);
       }
     }
   }
@@ -340,62 +364,54 @@ export class ParticleBody {
     if (this.isClamped) return;
     if (!capsules || capsules.length === 0) return;
 
-    const netDisplacement = new THREE.Vector3(0, 0, 0);
+    _netDisplacement.set(0, 0, 0);
+    _avgVelocity.set(0, 0, 0);
     let contactCount = 0;
-    const avgVelocity = new THREE.Vector3(0, 0, 0);
 
     for (let c = 0; c < capsules.length; c++) {
       const cap = capsules[c];
-      const capSeg = new THREE.Line3(cap.start, cap.end);
-      const closestPoint = new THREE.Vector3();
+      _capSeg.set(cap.start, cap.end);
 
       for (let i = 0; i < this.particles.length; i++) {
         const p = this.particles[i];
-        capSeg.closestPointToPoint(p.pos, true, closestPoint);
-        const dist = p.pos.distanceTo(closestPoint);
-        // Margen de seguridad sólido para eslabones; para los dedos del gripper se usa contacto directo
+        _capSeg.closestPointToPoint(p.pos, true, _closestPoint);
+        const distSq = p.pos.distanceToSquared(_closestPoint);
+        
         const isFingerCap = cap.name && cap.name.startsWith('gripper_finger');
         const safetyMargin = isFingerCap ? 0.002 : 0.015;
         const minDist = cap.radius + p.radius + safetyMargin;
+        const minDistSq = minDist * minDist;
 
-        if (dist < minDist && dist > 1e-6) {
-          const normal = new THREE.Vector3().subVectors(p.pos, closestPoint).normalize();
+        if (distSq < minDistSq && distSq > 1e-12) {
+          const dist = Math.sqrt(distSq);
+          _normal.subVectors(p.pos, _closestPoint).multiplyScalar(1.0 / dist);
           const penetration = minDist - dist;
           
-          // Desplazar partícula fuera de la cápsula
-          p.pos.addScaledVector(normal, penetration);
-
-          // Acumular el empuje sobre todo el cuerpo rígido
-          netDisplacement.addScaledVector(normal, penetration);
+          p.pos.addScaledVector(_normal, penetration);
+          _netDisplacement.addScaledVector(_normal, penetration);
           contactCount++;
 
           if (cap.velocity && cap.velocity.lengthSq() > 1e-4) {
-            avgVelocity.add(cap.velocity);
+            _avgVelocity.add(cap.velocity);
           } else {
-            // Empuje elástico suave proporcional a la penetración física (amortiguado para dedos)
             const pushStiffness = isFingerCap ? 8.0 : 40.0;
-            avgVelocity.addScaledVector(normal, penetration * pushStiffness);
+            _avgVelocity.addScaledVector(_normal, penetration * pushStiffness);
           }
         }
       }
     }
 
-    // Si hubo colisión con los eslabones del brazo, desplazar el centro de masa
-    // de manera que la caja entera sea empujada y NO sea atravesada
     if (contactCount > 0) {
-      const bodyPush = netDisplacement.divideScalar(contactCount);
-      // Trasladar el centro de masa del cuerpo
-      this.centerOfMass.add(bodyPush);
+      _bodyPush.copy(_netDisplacement).multiplyScalar(1.0 / contactCount);
+      this.centerOfMass.add(_bodyPush);
 
-      // Trasladar todas las partículas para mantener coherencia volumétrica instantánea
       for (let i = 0; i < this.particles.length; i++) {
-        this.particles[i].pos.add(bodyPush);
+        this.particles[i].pos.add(_bodyPush);
       }
 
-      // Transferir momento/velocidad para que continúe deslizándose de forma realista
-      avgVelocity.divideScalar(contactCount);
+      _avgVelocity.multiplyScalar(0.7 / contactCount);
       for (let i = 0; i < this.particles.length; i++) {
-        this.particles[i].vel.addScaledVector(avgVelocity, 0.7);
+        this.particles[i].vel.add(_avgVelocity);
       }
     }
   }
@@ -417,7 +433,6 @@ export class ParticleBody {
     this.visualMesh.quaternion.copy(this.orientation);
   }
 
-  // Arrastre continuo de las partículas cuando el manipulador traslada la caja
   setKinematicTarget(targetPos, targetQuat, dt) {
     this.isClamped = true;
     this.contactNormalForce = 75.0;
@@ -425,14 +440,13 @@ export class ParticleBody {
     this.centerOfMass.copy(targetPos);
     this.orientation.copy(targetQuat);
 
-    const goalPos = new THREE.Vector3();
     const invDt = dt > 1e-5 ? 1.0 / dt : 60;
 
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
-      goalPos.copy(p.restPos).applyQuaternion(this.orientation).add(this.centerOfMass);
+      _goalPos.copy(p.restPos).applyQuaternion(this.orientation).add(this.centerOfMass);
       p.prevPos.copy(p.pos);
-      p.pos.copy(goalPos);
+      p.pos.copy(_goalPos);
       p.vel.subVectors(p.pos, p.prevPos).multiplyScalar(invDt);
     }
   }
