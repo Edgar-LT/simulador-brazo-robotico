@@ -1,8 +1,18 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import { ROBOT_CONFIG } from '../config.js';
-import { Gripper } from './Gripper.js?v=3.3';
+import { Gripper } from './Gripper.js?v=4.0';
 import { Kinematics } from './Kinematics.js';
 import { MathUtils } from '../utils/MathUtils.js';
+
+// Scratchpad global reutilizable para RobotArm (Zero-GC)
+const _pBase = new THREE.Vector3();
+const _pJ2 = new THREE.Vector3();
+const _pJ3 = new THREE.Vector3();
+const _pJ4 = new THREE.Vector3();
+const _pJ5 = new THREE.Vector3();
+const _pTCP = new THREE.Vector3();
+const _pToolBase = new THREE.Vector3();
+const _zeroVec = new THREE.Vector3(0, 0, 0);
 
 export class RobotArm {
   constructor(scene, physicsWorld = null) {
@@ -19,8 +29,8 @@ export class RobotArm {
     this.jointTorques = [0, 0, 0, 0, 0, 0];
     this.isEmergencyStopped = false;
 
-    // Cápsulas de colisión física de los eslabones
-    this.linkCapsules = [];
+    // Array pre-alocado de cápsulas de colisión (Zero-GC)
+    this.linkCapsules = this.createCollisionCapsulesPool();
 
     // Materiales industriales
     this.materials = {
@@ -58,6 +68,19 @@ export class RobotArm {
     
     // Aplicar ángulos por defecto
     this.applyJointAngles(this.currentAngles);
+  }
+
+  createCollisionCapsulesPool() {
+    return [
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.32, velocity: new THREE.Vector3(), name: 'base' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.28, velocity: new THREE.Vector3(), name: 'upper_arm' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.24, velocity: new THREE.Vector3(), name: 'forearm' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.16, velocity: new THREE.Vector3(), name: 'wrist' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.10, velocity: new THREE.Vector3(), name: 'tool_base' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.045, velocity: new THREE.Vector3(), name: 'gripper_palm_rail' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.016, velocity: new THREE.Vector3(), name: 'gripper_finger_left' },
+      { start: new THREE.Vector3(), end: new THREE.Vector3(), radius: 0.016, velocity: new THREE.Vector3(), name: 'gripper_finger_right' }
+    ];
   }
 
   buildRobot() {
@@ -226,106 +249,72 @@ export class RobotArm {
     }
   }
 
-  // Genera y actualiza las cápsulas de colisión física continua de cada eslabón
+  // Actualiza in-place las cápsulas de colisión física (Zero-GC, 0 asignaciones)
   updateCollisionCapsules() {
-    this.linkCapsules = [];
+    this.joints[0].getWorldPosition(_pBase);
+    this.joints[1].getWorldPosition(_pJ2);
+    this.joints[2].getWorldPosition(_pJ3);
+    this.joints[3].getWorldPosition(_pJ4);
+    this.joints[4].getWorldPosition(_pJ5);
+    this.tcpObject.getWorldPosition(_pTCP);
 
-    // Puntos de articulación en espacio de mundo
-    const pBase = new THREE.Vector3();
-    const pJ2 = new THREE.Vector3();
-    const pJ3 = new THREE.Vector3();
-    const pJ4 = new THREE.Vector3();
-    const pJ5 = new THREE.Vector3();
-    const pTCP = new THREE.Vector3();
+    const vGripper = this.gripper.linearVelocity;
 
-    this.joints[0].getWorldPosition(pBase);
-    this.joints[1].getWorldPosition(pJ2);
-    this.joints[2].getWorldPosition(pJ3);
-    this.joints[3].getWorldPosition(pJ4);
-    this.joints[4].getWorldPosition(pJ5);
-    this.tcpObject.getWorldPosition(pTCP);
+    // 0. Base
+    const c0 = this.linkCapsules[0];
+    c0.start.copy(_pBase);
+    c0.end.copy(_pJ2);
+    c0.velocity.copy(_zeroVec);
 
-    // 1. Cápsula Eslabón 1 (Columna hombro)
-    this.linkCapsules.push({
-      start: pBase,
-      end: pJ2,
-      radius: 0.32,
-      velocity: new THREE.Vector3(0, 0, 0)
-    });
+    // 1. Upper Arm
+    const c1 = this.linkCapsules[1];
+    c1.start.copy(_pJ2);
+    c1.end.copy(_pJ3);
+    c1.velocity.copy(vGripper);
 
-    // 2. Cápsula Eslabón 2 (Brazo superior)
-    this.linkCapsules.push({
-      start: pJ2,
-      end: pJ3,
-      radius: 0.28,
-      velocity: this.gripper.linearVelocity
-    });
+    // 2. Forearm
+    const c2 = this.linkCapsules[2];
+    c2.start.copy(_pJ3);
+    c2.end.copy(_pJ4);
+    c2.velocity.copy(vGripper);
 
-    // 3. Cápsula Eslabón 3 (Antebrazo)
-    this.linkCapsules.push({
-      start: pJ3,
-      end: pJ4,
-      radius: 0.24,
-      velocity: this.gripper.linearVelocity
-    });
+    // 3. Wrist
+    const c3 = this.linkCapsules[3];
+    c3.start.copy(_pJ4);
+    c3.end.copy(_pJ5);
+    c3.velocity.copy(vGripper);
 
-    // 4. Cápsula Eslabón 4-5 (Muñeca)
-    this.linkCapsules.push({
-      start: pJ4,
-      end: pJ5,
-      radius: 0.16,
-      name: 'wrist',
-      velocity: this.gripper.linearVelocity
-    });
+    // 4. Tool Base
+    _pToolBase.copy(_pJ5).lerp(_pTCP, 0.45);
+    const c4 = this.linkCapsules[4];
+    c4.start.copy(_pJ5);
+    c4.end.copy(_pToolBase);
+    c4.velocity.copy(vGripper);
 
-    // 5. Cápsula Base de la Herramienta (excluye las yemas del TCP para no empujar la caja al descender a agarrarla)
-    const pToolBase = pJ5.clone().lerp(pTCP, 0.45);
-    this.linkCapsules.push({
-      start: pJ5,
-      end: pToolBase,
-      radius: 0.10,
-      name: 'tool_base',
-      velocity: this.gripper.linearVelocity
-    });
+    // 5. Gripper Palm Rail
+    const c5 = this.linkCapsules[5];
+    c5.start.set(-0.16, 0.09, 0);
+    c5.end.set(0.16, 0.09, 0);
+    this.gripper.group.localToWorld(c5.start);
+    this.gripper.group.localToWorld(c5.end);
+    c5.velocity.copy(vGripper);
 
-    // 6. Cápsula de la Palma / Riel Transversal de la pinza
-    const railStart = new THREE.Vector3(-0.16, 0.09, 0);
-    const railEnd = new THREE.Vector3(0.16, 0.09, 0);
-    this.gripper.group.localToWorld(railStart);
-    this.gripper.group.localToWorld(railEnd);
-    this.linkCapsules.push({
-      start: railStart,
-      end: railEnd,
-      radius: 0.045,
-      name: 'gripper_palm_rail',
-      velocity: this.gripper.linearVelocity
-    });
+    // 6. Left Finger
+    const halfW = this.gripper.currentWidth / 2;
+    const c6 = this.linkCapsules[6];
+    c6.start.set(-halfW, 0.11, 0);
+    c6.end.set(-halfW, 0.23, 0);
+    this.gripper.group.localToWorld(c6.start);
+    this.gripper.group.localToWorld(c6.end);
+    c6.velocity.copy(vGripper);
 
-    // 7. Cápsulas de los Dedos Izquierdo y Derecho de la pinza
-    // Permiten que las cajas colisionen con las caras externas y frontales de los dedos sin ser atravesadas
-    const fLeftStart = new THREE.Vector3(-this.gripper.currentWidth / 2, 0.11, 0);
-    const fLeftEnd = new THREE.Vector3(-this.gripper.currentWidth / 2, 0.23, 0);
-    this.gripper.group.localToWorld(fLeftStart);
-    this.gripper.group.localToWorld(fLeftEnd);
-    this.linkCapsules.push({
-      start: fLeftStart,
-      end: fLeftEnd,
-      radius: 0.016,
-      name: 'gripper_finger_left',
-      velocity: this.gripper.linearVelocity
-    });
-
-    const fRightStart = new THREE.Vector3(this.gripper.currentWidth / 2, 0.11, 0);
-    const fRightEnd = new THREE.Vector3(this.gripper.currentWidth / 2, 0.23, 0);
-    this.gripper.group.localToWorld(fRightStart);
-    this.gripper.group.localToWorld(fRightEnd);
-    this.linkCapsules.push({
-      start: fRightStart,
-      end: fRightEnd,
-      radius: 0.016,
-      name: 'gripper_finger_right',
-      velocity: this.gripper.linearVelocity
-    });
+    // 7. Right Finger
+    const c7 = this.linkCapsules[7];
+    c7.start.set(halfW, 0.11, 0);
+    c7.end.set(halfW, 0.23, 0);
+    this.gripper.group.localToWorld(c7.start);
+    this.gripper.group.localToWorld(c7.end);
+    c7.velocity.copy(vGripper);
   }
 
   dispose() {
@@ -396,13 +385,15 @@ export class RobotArm {
     }
 
     const responseSpeed = 8.0;
+    const invDelta = delta > 1e-5 ? 1.0 / delta : 60;
+
     for (let i = 0; i < 6; i++) {
       const diff = this.targetAngles[i] - this.currentAngles[i];
       const maxDelta = this.config.jointLimits[i].maxSpeed * delta;
       const step = MathUtils.clamp(diff * responseSpeed * delta, -maxDelta, maxDelta);
       
       this.currentAngles[i] += step;
-      this.jointVelocities[i] = step / (delta || 0.016);
+      this.jointVelocities[i] = step * invDelta;
       
       const gravityFactor = (i === 1 || i === 2) ? Math.cos(this.currentAngles[i]) * 15.0 : 2.0;
       this.jointTorques[i] = Math.abs(this.jointVelocities[i] * 4.2) + Math.abs(gravityFactor);

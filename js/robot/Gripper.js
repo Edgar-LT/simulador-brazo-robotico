@@ -1,5 +1,20 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 
+// Scratchpad global reutilizable para Gripper (Zero-GC en render/física)
+const _tcpWorldPos = new THREE.Vector3();
+const _tcpWorldQuat = new THREE.Quaternion();
+const _objWorldPos = new THREE.Vector3();
+const _objWorldQuat = new THREE.Quaternion();
+const _invTcpQuat = new THREE.Quaternion();
+const _targetPos = new THREE.Vector3();
+const _targetQuat = new THREE.Quaternion();
+const _smoothedPos = new THREE.Vector3();
+const _smoothedQuat = new THREE.Quaternion();
+const _currentPos = new THREE.Vector3();
+const _currentQuat = new THREE.Quaternion();
+const _objBox = new THREE.Box3();
+const _gripBounds = new THREE.Box3();
+
 export class Gripper {
   constructor(robot) {
     this.robot = robot;
@@ -115,7 +130,7 @@ export class Gripper {
     }
   }
 
-  // Detecta si una caja está físicamente dentro del volumen real entre las yemas de la garra
+  // Detecta si una caja está físicamente dentro del volumen real entre las yemas de la garra (Zero-GC)
   findNearbyObject(candidates) {
     if (!candidates || candidates.length === 0) return null;
 
@@ -124,32 +139,26 @@ export class Gripper {
     const leftBox = this.tempBoxLeft.setFromObject(this.fingerLeftMesh);
     const rightBox = this.tempBoxRight.setFromObject(this.fingerRightMesh);
 
-    // Volumen estricto comprendido entre las caras internas de ambos dedos
-    const gripBounds = new THREE.Box3();
-    gripBounds.min.x = Math.min(leftBox.min.x, rightBox.min.x) - 0.02;
-    gripBounds.max.x = Math.max(leftBox.max.x, rightBox.max.x) + 0.02;
-    gripBounds.min.y = Math.min(leftBox.min.y, rightBox.min.y) - 0.03;
-    gripBounds.max.y = Math.max(leftBox.max.y, rightBox.max.y) + 0.03;
-    gripBounds.min.z = Math.min(leftBox.min.z, rightBox.min.z) - 0.04;
-    gripBounds.max.z = Math.max(leftBox.max.z, rightBox.max.z) + 0.04;
+    _gripBounds.min.x = Math.min(leftBox.min.x, rightBox.min.x) - 0.02;
+    _gripBounds.max.x = Math.max(leftBox.max.x, rightBox.max.x) + 0.02;
+    _gripBounds.min.y = Math.min(leftBox.min.y, rightBox.min.y) - 0.03;
+    _gripBounds.max.y = Math.max(leftBox.max.y, rightBox.max.y) + 0.03;
+    _gripBounds.min.z = Math.min(leftBox.min.z, rightBox.min.z) - 0.04;
+    _gripBounds.max.z = Math.max(leftBox.max.z, rightBox.max.z) + 0.04;
 
-    const objBox = new THREE.Box3();
-    const objPos = new THREE.Vector3();
-    const tcpPos = new THREE.Vector3();
-    this.tcp.getWorldPosition(tcpPos);
+    this.tcp.getWorldPosition(_tcpWorldPos);
 
     let closestObj = null;
-    let minDistance = 0.12; // Radio estricto de captura física real (12 cm máx)
+    let minDistanceSq = 0.12 * 0.12; // Radio estricto de captura física real (12 cm máx)
 
     for (let i = 0; i < candidates.length; i++) {
       const obj = candidates[i];
-      obj.getWorldPosition(objPos);
-      objBox.setFromObject(obj);
+      obj.getWorldPosition(_objWorldPos);
+      _objBox.setFromObject(obj);
 
-      const dist = tcpPos.distanceTo(objPos);
-      // Solo es válido si la caja intersecta el espacio físico entre dedos Y está a distancia de agarre
-      if (gripBounds.intersectsBox(objBox) && dist < minDistance) {
-        minDistance = dist;
+      const distSq = _tcpWorldPos.distanceToSquared(_objWorldPos);
+      if (_gripBounds.intersectsBox(_objBox) && distSq < minDistanceSq) {
+        minDistanceSq = distSq;
         closestObj = obj;
       }
     }
@@ -161,7 +170,6 @@ export class Gripper {
   grabObject(object3D, candidates = null) {
     if (this.grippedObject) return;
 
-    // Verificar presencia física real
     let target = null;
     if (object3D) {
       target = this.findNearbyObject([object3D]);
@@ -172,20 +180,14 @@ export class Gripper {
     if (!target) return;
     this.grippedObject = target;
 
-    // Calcular offset relativo respecto al TCP
-    const tcpWorldPos = new THREE.Vector3();
-    const tcpWorldQuat = new THREE.Quaternion();
-    this.tcp.getWorldPosition(tcpWorldPos);
-    this.tcp.getWorldQuaternion(tcpWorldQuat);
+    this.tcp.getWorldPosition(_tcpWorldPos);
+    this.tcp.getWorldQuaternion(_tcpWorldQuat);
+    target.getWorldPosition(_objWorldPos);
+    target.getWorldQuaternion(_objWorldQuat);
 
-    const objWorldPos = new THREE.Vector3();
-    const objWorldQuat = new THREE.Quaternion();
-    target.getWorldPosition(objWorldPos);
-    target.getWorldQuaternion(objWorldQuat);
-
-    const invTcpQuat = tcpWorldQuat.clone().invert();
-    this.relativeHoldPos.subVectors(objWorldPos, tcpWorldPos).applyQuaternion(invTcpQuat);
-    this.relativeHoldQuat.copy(invTcpQuat).multiply(objWorldQuat);
+    _invTcpQuat.copy(_tcpWorldQuat).invert();
+    this.relativeHoldPos.subVectors(_objWorldPos, _tcpWorldPos).applyQuaternion(_invTcpQuat);
+    this.relativeHoldQuat.copy(_invTcpQuat).multiply(_objWorldQuat);
   }
 
   releaseObject() {
@@ -193,7 +195,6 @@ export class Gripper {
       const pBody = this.grippedObject.userData.particleBody;
       pBody.isClamped = false;
       pBody.contactNormalForce = 0.0;
-      // Disipar impulsos espurios residuales al soltar para que repose naturalmente en la mesa
       for (let i = 0; i < pBody.particles.length; i++) {
         pBody.particles[i].vel.set(0, 0, 0);
       }
@@ -213,41 +214,39 @@ export class Gripper {
 
   update(delta) {
     // 1. Cinemática de apertura / cierre del servomotor de la pinza
-    if (Math.abs(this.currentWidth - this.targetWidth) > 0.001) {
+    if (Math.abs(this.currentWidth - this.targetWidth) > 0.0005) {
       const step = (this.targetWidth - this.currentWidth) * 14 * delta;
       this.currentWidth += step;
       this.fingerLeft.position.x = -this.currentWidth / 2;
       this.fingerRight.position.x = this.currentWidth / 2;
+      this.fingerLeft.updateMatrix();
+      this.fingerRight.updateMatrix();
       this.fingerLeft.updateMatrixWorld(true);
       this.fingerRight.updateMatrixWorld(true);
     }
 
     // 2. Estimación continua de velocidad lineal en el espacio de mundo
-    const currentWorldPos = new THREE.Vector3();
-    this.tcp.getWorldPosition(currentWorldPos);
+    this.tcp.getWorldPosition(_tcpWorldPos);
     if (delta > 1e-5) {
-      this.linearVelocity.subVectors(currentWorldPos, this.lastWorldPos).multiplyScalar(1.0 / delta);
+      this.linearVelocity.subVectors(_tcpWorldPos, this.lastWorldPos).multiplyScalar(1.0 / delta);
     }
-    this.lastWorldPos.copy(currentWorldPos);
+    this.lastWorldPos.copy(_tcpWorldPos);
 
-    // 3. Arrastre de cuerpo físico XPBD si está sujeto por la pinza
+    // 3. Arrastre de cuerpo físico XPBD si está sujeto por la pinza (CERO asignaciones)
     if (this.grippedObject && !this.isOpen) {
-      const tcpWorldPos = new THREE.Vector3();
-      const tcpWorldQuat = new THREE.Quaternion();
-      this.tcp.getWorldPosition(tcpWorldPos);
-      this.tcp.getWorldQuaternion(tcpWorldQuat);
+      this.tcp.getWorldQuaternion(_tcpWorldQuat);
 
-      const targetPos = this.relativeHoldPos.clone().applyQuaternion(tcpWorldQuat).add(tcpWorldPos);
-      const targetQuat = tcpWorldQuat.clone().multiply(this.relativeHoldQuat);
+      _targetPos.copy(this.relativeHoldPos).applyQuaternion(_tcpWorldQuat).add(_tcpWorldPos);
+      _targetQuat.copy(_tcpWorldQuat).multiply(this.relativeHoldQuat);
 
       if (this.grippedObject.userData && this.grippedObject.userData.particleBody) {
         const pBody = this.grippedObject.userData.particleBody;
-        // Interpolación amortiguada (slerp / lerp) para movimiento fluido y natural sin sacudidas
-        const currentPos = pBody.centerOfMass;
-        const currentQuat = pBody.orientation;
-        const smoothedPos = currentPos.clone().lerp(targetPos, 0.45);
-        const smoothedQuat = currentQuat.clone().slerp(targetQuat, 0.45);
-        pBody.setKinematicTarget(smoothedPos, smoothedQuat, delta);
+        _currentPos.copy(pBody.centerOfMass);
+        _currentQuat.copy(pBody.orientation);
+
+        _smoothedPos.copy(_currentPos).lerp(_targetPos, 0.45);
+        _smoothedQuat.copy(_currentQuat).slerp(_targetQuat, 0.45);
+        pBody.setKinematicTarget(_smoothedPos, _smoothedQuat, delta);
       }
     }
   }
